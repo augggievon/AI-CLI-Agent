@@ -3,12 +3,12 @@
 import os
 
 
-def get_files_info(working_directory: str, directory: str) -> str:
+def get_files_info(working_directory: str, directory: str = ".") -> str:
     """
-    Validate that `directory` is a safe subdirectory of `working_directory`.
+    List files in `directory` under `working_directory`.
 
     Always returns a string:
-      - Success: 'Success: "{directory}" is within the working directory'
+      - Success: one line per entry: "- NAME: size: N bytes, is_dir: True/False"
       - Error:   'Error: ...'
     """
     try:
@@ -18,11 +18,10 @@ def get_files_info(working_directory: str, directory: str) -> str:
         # 2. Build normalized target directory path (treat `directory` as relative)
         target_dir = os.path.normpath(os.path.join(working_dir_abs, directory))
 
-        # 3. Ensure target_dir is within working_dir_abs using commonpath [web:214][web:219]
+        # 3. Ensure target_dir is within working_dir_abs
         valid_target_dir = (
             os.path.commonpath([working_dir_abs, target_dir]) == working_dir_abs
         )
-
         if not valid_target_dir:
             return (
                 f'Error: Cannot list "{directory}" as it is outside the '
@@ -32,38 +31,27 @@ def get_files_info(working_directory: str, directory: str) -> str:
         # 4. Ensure target_dir is actually a directory
         if not os.path.isdir(target_dir):
             return f'Error: "{directory}" is not a directory'
-        
-        lines = []
 
-        for i in os.listdir(target_dir):
-            full_path = os.path.join(target_dir, i)
+        # 5. Build listing lines
+        lines: list[str] = []
+        for entry_name in os.listdir(target_dir):
+            full_path = os.path.join(target_dir, entry_name)
             is_dir = os.path.isdir(full_path)
-            size = os.path.getsize(full_path)
+            try:
+                size = os.path.getsize(full_path)
+            except OSError:
+                size = 0
 
-            entry={
+            lines.append(
+                f"- {entry_name}: size: {size} bytes, is_dir: {is_dir}"
+            )
 
-                "name": name,
-                "size": size,
-                "is_dir": is_dir
-            }
-            
+        # If directory is empty, still return something deterministic
+        if not lines:
+            return f'No entries found in "{directory}"'
 
-            lines = f"- {name}: file size: {size} bytes: is_dir: {is_dir}"
-
-            lines.append(entry)
-
-            result = "\n".join(lines)
-            return result
-
-
-
-        # 5. If everything is valid, return success string
-        return f'Success: "{directory}" is within the working directory'
-    
-    
+        return "\n".join(lines)
 
     except Exception as e:
         # Any unexpected errors become error strings for the LLM to handle
         return f"Error: {e}"
-    
-        
